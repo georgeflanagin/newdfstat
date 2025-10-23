@@ -81,7 +81,7 @@ down_hosts = SloppyTree()
 def clear_down_hosts(host:str) -> None:
     if host in down_hosts:
         del down_hosts[host]
-    return 
+    return
 
 def send_message(*args) -> None:
     pass
@@ -104,7 +104,7 @@ def manage_down_hosts(host:str) -> None:
         # Increment the counter and note the time.
         down_hosts[host].num_times += 1
         down_hosts[host].this_fail = time.time()
-        
+
     # Check whether we need to do anything about it.
     p_host = down_hosts[host]
 
@@ -114,7 +114,7 @@ def manage_down_hosts(host:str) -> None:
 
     # Have we ever sent a message?
     if p_host.message_sent:
-    
+
         # Has it been long enough that we need to send another one?
         if p_host.this_fail - p_host.message_sent > myconfig.message_repeat:
             send_message(myconfig.failure_message.format(host))
@@ -127,12 +127,12 @@ def manage_down_hosts(host:str) -> None:
             p_host.message_sent = time.time()
         else:
             pass
-        
+
 
 @trap
 def extract_df(lines:list, partitions:list) -> object:
     """
-    This command extracts values from df -P query. The unparsed data 
+    This command extracts values from df -P query. The unparsed data
     look something like these data rows (but w/o the header).
 
     Filesystem                     1024-blocks      Used  Available Capacity Mounted on
@@ -152,7 +152,7 @@ def extract_df(lines:list, partitions:list) -> object:
             logger.debug(f'{partition=} {space=} {used=} {available=}')
 
     return d
-    
+
 
 @trap
 def graceful_exit() -> int:
@@ -178,7 +178,7 @@ def graceful_exit() -> int:
 
     finally:
         fileutils.fclose_all()
-        lockfile = f"{os.path.basename(__file__)[:-3]}.lock" 
+        lockfile = f"{os.path.basename(__file__)[:-3]}.lock"
         fileutils.release_lockfile(lockfile)
         if os.isatty(1): return os.EX_OK
         os._exit(os.EX_OK)
@@ -187,14 +187,14 @@ def graceful_exit() -> int:
 @trap
 def handler(signum:int, stack:object=None) -> None:
     """
-    Map SIGHUP and SIGUSR1 to a restart/reload, and 
+    Map SIGHUP and SIGUSR1 to a restart/reload, and
     SIGUSR2 and the other common signals to an orderly
-    shutdown. 
+    shutdown.
     """
     global logger
     logger.debug("handler")
     global myconfig
-    if signum in [ signal.SIGHUP, signal.SIGUSR1 ]: 
+    if signum in [ signal.SIGHUP, signal.SIGUSR1 ]:
         dfstat_main(myconfig)
 
     elif signum in [ signal.SIGUSR2, signal.SIGQUIT, signal.SIGTERM, signal.SIGINT ]:
@@ -224,9 +224,9 @@ def query_host(host:str) -> str:
     cmd = f"""
         ssh {hostinfo.user}@{hostinfo.hostname} 'df -P'
         """
-    try: 
+    try:
         result = SloppyTree(dorunrun(cmd, return_datatype = dict))
-        
+
         if not result.OK:
             logger.error(f"{result=}")
             db.record_error(host, result.code)
@@ -250,17 +250,17 @@ def query_host(host:str) -> str:
             db.record_error(host, -1)
         except:
             return []
-    
+
 @trap
 def null_generator():
     return
     yield
 
-@trap 
+@trap
 def initial_inserts():
     """
     Construct SQL insert statements and execute.
-    This is when new workstation and its partitions 
+    This is when new workstation and its partitions
     is added to the toml file.
     """
     global db
@@ -269,7 +269,7 @@ def initial_inserts():
         partitions = host["partition"]
         for partition in partitions:
             #print(hostname, partition)
-            db.initial(hostname, partition) 
+            db.initial(hostname, partition)
     return
 
 @trap
@@ -278,7 +278,7 @@ def dfstat_main(myconfig:SloppyTree, analyze_this:bool) -> int:
     Note: passing myconfig as an argument is not necessary in the
         general case. It is a global. However, when we process
         a re-read or re-start signal, we want the handler to scoop
-        up the global, and call this function. 
+        up the global, and call this function.
     """
     global sshconfig
     global db
@@ -313,7 +313,7 @@ def dfstat_main(myconfig:SloppyTree, analyze_this:bool) -> int:
             time.sleep(myconfig.time_interval)
     finally:
         return graceful_exit()
-        
+
     # Open the database.
     # try:
     #     db = DFStatsDB(myconfig.database)
@@ -322,14 +322,14 @@ def dfstat_main(myconfig:SloppyTree, analyze_this:bool) -> int:
     #     sys.exit(os.EX_CONFIG)
     db = DFStatsDB(myconfig.database)
     db.populate_db(myargs.sql)
-    print("ddd", db) 
+    print("ddd", db)
     initial_inserts()
     #while True:
     try:
         for host, partitions in db.targets.items():
             logger.debug(f"{host=} {partitions=}")
             info = extract_df(query_host(host), partitions)
-            
+
             for partition, values in info.items():
                 db.record_measurement(host, partition, values[1], values[2])
     except Exception as e:
@@ -338,11 +338,11 @@ def dfstat_main(myconfig:SloppyTree, analyze_this:bool) -> int:
 def HELP() -> None:
     """
     Better help.
-         1         2         3         4         5         6         7         8          
+         1         2         3         4         5         6         7         8
     """
     print("""
-        dfstat is a program to monitor available disk space on one or more 
-            (remote) computers. You can monitor the space on *this* computer 
+        dfstat is a program to monitor available disk space on one or more
+            (remote) computers. You can monitor the space on *this* computer
             also, but you can do that without this daemon, right?
 
         Command line options:
@@ -354,11 +354,11 @@ def HELP() -> None:
         -L, --loglevel {10, 20, 30, 40, 50}
             Sets the loglevel. 10 logs everything. 50 only logs errors.
 
-        --no-analysis 
-            If present, the analysis daemon is *NOT* launched. The purpose is to 
+        --no-analysis
+            If present, the analysis daemon is *NOT* launched. The purpose is to
             allow relaunch of dfstat when the analysis daemon is already running.
 
-        --no-daemon 
+        --no-daemon
             If present, the program will run in the foreground. This is primarily
             for development and debugging.
 
@@ -372,19 +372,19 @@ def HELP() -> None:
         --------
 
         SIGHUP, SIGUSR1 -- request to take measurements NOW. This does not affect
-            regular measurements at intervals given in the toml file. 
+            regular measurements at intervals given in the toml file.
 
         SIGQUIT, SIGTERM, SIGUSR2 -- do a graceful shutdown of dfstat and the
-            dfanalysis daemon (if it is running). 
+            dfanalysis daemon (if it is running).
 
         Other signals are ignored.
-            
+
     """)
 
 
 if __name__ == '__main__':
-    
-    parser = argparse.ArgumentParser(prog="dfstat", 
+
+    parser = argparse.ArgumentParser(prog="dfstat",
         add_help=False,
         description="What dfstat does, dfstat does best.")
 
@@ -408,16 +408,16 @@ if __name__ == '__main__':
     # Abandon if the user is just requesting help.
     if myargs.help: HELP() or sys.exit(os.EX_OK)
 
-    logfile  = f"{os.path.basename(__file__)[:-3]}.log" 
+    logfile  = f"{os.path.basename(__file__)[:-3]}.log"
 
     # Make sure we are the only one copy of this program that is running.
-    lockfile = f"{os.path.basename(__file__)[:-3]}.lock" 
+    lockfile = f"{os.path.basename(__file__)[:-3]}.lock"
     if not fileutils.get_lockfile(lockfile):
         print(f"Cannot get {lockfile=}. This program is already running.")
         sys.exit(os.EX_UNAVAILABLE)
-    
+
     analyze_this = not myargs.no_analysis
-    
+
     # ignore all signals.
     for sig in range(0, signal.SIGRTMAX):
         try:
@@ -430,7 +430,7 @@ if __name__ == '__main__':
                         signal.SIGUSR1, signal.SIGUSR2 ]:
         signal.signal(sig, handler)
 
-    # Read the configuration information. 
+    # Read the configuration information.
     try:
         with open(myargs.input, 'rb') as f:
             myconfig=SloppyTree(tomllib.load(f))
@@ -438,7 +438,7 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"{e=}\nUnable to read config from {myargs.input}")
         sys.exit(os.EX_CONFIG)
-    
+
     ###
     # See if the database is present.
     ###
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     else:
         print(f"{myconfig.database} not found.")
         sys.exit(os.EX_DATAERR)
-    
+
     ###
     # Go demonic unless we decide not to. We probably want to know
     # our PID in that case.
@@ -472,7 +472,7 @@ if __name__ == '__main__':
     logger.info('+++ BEGIN +++')
 
     if myargs.messenger:
-        cmd = f"""nohup python {myconfig.urmessage.source} &""" 
+        cmd = f"""nohup python {myconfig.urmessage.source} &"""
         try:
             result = dorunrun(cmd, return_datatype = dict)
         except Exception as e:

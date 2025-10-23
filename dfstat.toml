@@ -1,5 +1,5 @@
 ########################################################################
-# The database contains all the information about hosts and 
+# The database contains all the information about hosts and
 # partitions that this program monitors.
 ########################################################################
 database = './dfstat.db'
@@ -8,8 +8,8 @@ database = './dfstat.db'
 # Messaging information
 ########################################################################
 
-### 
-# Location of the port and the source code (if it is being run as a 
+###
+# Location of the port and the source code (if it is being run as a
 # child process of dfstat).
 ###
 urmessage = { host = '127.0.0.1', port = 33333, source = './urmessage.py' }
@@ -17,10 +17,9 @@ urmessage = { host = '127.0.0.1', port = 33333, source = './urmessage.py' }
 ###
 # Where to send the alarms.
 ###
-notification_addresses = [ 'alina.enikeeva@richmond.edu', 
+notification_addresses = [ 'hpc@richmond.edu',
     'gflanagin@richmond.edu',
-    'jtonini@richmond.edu',
-    '8043992699@tmomail.net' ]
+    'jtonini@richmond.edu']
 
 notification_source = 'hpc@richmond.edu'
 
@@ -50,8 +49,8 @@ failure_message = "{} is non-responsive."
 ###
 # Definitions of what we are monitoring for statistical analysis
 ###
-hosts = [   {host = 'alexis', partition = ["ERROR", "/home", "/usr/local"]}, 
-            {host = 'adam', partition = ["ERROR", "/home", "/"]}, 
+hosts = [   {host = 'alexis', partition = ["ERROR", "/home", "/usr/local"]},
+            {host = 'adam', partition = ["ERROR", "/home", "/"]},
             {host = 'spydur', partition = ["ERROR", "/home", "/usr/local", "/scratch"]},
             {host = 'billieholiday', partition = ["ERROR", "/home", "/"]},
             {host = 'justin', partition = ["ERROR", "/home", "/", "/scr", "/data"]},
@@ -67,7 +66,7 @@ hosts = [   {host = 'alexis', partition = ["ERROR", "/home", "/usr/local"]},
             {host = 'sarah', partition = ["ERROR", "/"]},
             {host = 'thais', partition = ["ERROR", "/home", "/"]},
             {host = 'spiderweb', partition = ["/home", "/", "/var", "/opt", "/usr/local"]},
-            {host = 'enterprise', partition = ["ERROR", "/home", "/"]}, 
+            {host = 'enterprise', partition = ["ERROR", "/home", "/"]},
             {host = "trueuser", partition = ["ERROR", "/", "/var", "/mnt/usrlocal"]},
             {host = 'truenas', partition = ["ERROR", "/", "/var", "/mnt/Parish_backup"]},
             {host = 'newnas', partition = ["ERROR", "/", "/var", "/mnt/chem1"]}

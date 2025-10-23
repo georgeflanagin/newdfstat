@@ -70,6 +70,8 @@ class DFDB (SQLiteDB):
 
     GET_DATA = """SELECT * FROM recent_stats"""
 
+    GET_CONSTANTS = """SELECT * FROM konstants"""
+
     def __init__(self, name:str) -> None:
         super.__init__(name, use_pandas=use_pandas)
 
@@ -86,4 +88,13 @@ class DFDB (SQLiteDB):
         Retrieve rows for analysis.
         """
         return self.execute_SQL(DFDB.GET_DATA)
+
+
+    def get_constants(self) -> dict:
+        """
+        Column names are the keys.
+        """
+        df=self.execute_SQL(DFDB.GET_CONSTANTS)
+        return dict(zip(df.columns.tolist(), df.iloc[0].tolist()))
+
 

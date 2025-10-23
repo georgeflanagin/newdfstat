@@ -1,103 +1,124 @@
-DROP VIEW  IF EXISTS v_recent_measurements;
-DROP VIEW  IF EXISTS v_hosts;
-DROP INDEX IF EXISTS timestamp_index;
-DROP TABLE IF EXISTS df_stat;
-DROP TABLE IF EXISTS hosts;
+DROP TABLE IF EXISTS stats;
+DROP TABLE IF EXISTS konstants;
 
-CREATE TABLE hosts( 
-    host varchar(32), 
-    partition varchar(32), 
-    PRIMARY KEY (host, partition) 
+-- Keep this stuff in here rather than in a config file.
+CREATE TABLE konstants (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    recent_days INTEGER NOT NULL CHECK (recent_days BETWEEN 1 AND 30),
+    sample_rate INTEGER NOT NULL CHECK (sample_rate BETWEEN 15 AND 120),
+    kpss_level REAL NOT NULL CHECK (kpss_level BETWEEN 0.45 AND 0.50),
+    kpss_trend REAL NOT NULL CHECK (kpss_trend BETWEEN 0.14 AND 0.15),
+    min_samples INTEGER NOT NULL CHECK (min_samples BETWEEN 24 AND 760),
+    alert_threshold REAL NOT NULL CHECK (alert_threshold BETWEEN 0.5 AND 0.9)
+    ) WITHOUT ROWID;
+
+
+-- Sane values if we are building the database.
+INSERT INTO konstants (id, recent_days, sample_rate,
+    kpss_level, kpss_trend, min_samples, alert_threshold)
+    VALUES (1, 7, 60, 0.45, 0.142, 24, 0.8);
+
+
+-- Straightforward fact table.
+CREATE TABLE IF NOT EXISTS stats (
+    host TEXT,
+    mountpoint TEXT,
+    total INTEGER DEFAULT NULL CHECK (total > 0),
+    used INTEGER DEFAULT NULL CHECK (used >= 0 AND used <= total),
+    free INTEGER GENERATED ALWAYS AS (total - used) VIRTUAL,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (host, mountpoint, time)
+    ) WITHOUT ROWID;
+
+
+-- Just one compound index.
+CREATE INDEX idx_time on stats(host, mountpoint, time);
+
+-- Recent readings base on the value in the database.
+CREATE VIEW IF NOT EXISTS recent_stats AS
+    SELECT s.* FROM stats AS s
+        WHERE s.time >= datetime('now',
+            printf('-%d days', (SELECT recent_days FROM konstants WHERE id=1))
     );
 
-CREATE TABLE df_stat( 
-    host varchar(32), 
-    partition varchar(32) DEFAULT 'ERROR', 
-    partition_size int DEFAULT 0, 
-    avail_disk int DEFAULT 0, 
-    error_code int DEFAULT 0, 
-    measured_at datetime default current_timestamp, 
-    FOREIGN KEY (host, partition) REFERENCES hosts(host, partition) ON DELETE CASCADE ON UPDATE CASCADE);
+CREATE VIEW IF NOT EXISTS old_stats AS
+    SELECT s.* FROM stats AS s
+        WHERE s.time < datetime('now',
+            printf('-%d days', (SELECT recent_days FROM konstants WHERE id=1))
+    );
 
-CREATE INDEX timestamp_idx on df_stat(measured_at);
+CREATE TRIGGER IF NOT EXISTS delete_trigger
+    INSTEAD OF DELETE ON old_stats
+        BEGIN
+            DELETE FROM stats
+            WHERE time IN (
+                SELECT time from old_stats
+                );
+        END;
 
-CREATE VIEW v_hosts as SELECT * FROM hosts ORDER BY host, partition;
+-- Rollup of recent data to provide a summary.
+CREATE VIEW IF NOT EXISTS recent_usage AS SELECT
+    host,
+    mountpoint,
+    COUNT(*)                            AS n_samples,
+    MIN(time)                           AS first_sample,
+    MAX(time)                           AS last_sample,
+    AVG(used * 1.0 / total)             AS avg_utilization,
+    MAX(used * 1.0 / total)             AS peak_utilization,
+    MIN(free * 1.0 / total)             AS min_free_pct
+        FROM recent_stats
+            GROUP BY host, mountpoint;
 
-CREATE VIEW v_recent_measurements as SELECT * FROM df_stat ORDER BY measured_at DESC;
+-- Check completeness. This will keep the Python code from
+-- blowing up from bad data. This view summarizes the completeness.
+CREATE VIEW IF NOT EXISTS recent_coverage AS
+    WITH k AS (SELECT sample_rate, min_samples FROM konstants WHERE id=1),
+        u AS (SELECT * FROM recent_usage)
+    SELECT
+        u.host,
+        u.mountpoint,
+        u.n_samples,
+        u.first_sample,
+        u.last_sample,
+  -- Expected count = elapsed_minutes / cadence + 1
+  ( (julianday(u.last_sample) - julianday(u.first_sample)) * 1440.0
+      / (SELECT sample_rate FROM k) + 1.0 )        AS expected_samples,
+  u.n_samples * 1.0 /
+  ( (julianday(u.last_sample) - julianday(u.first_sample)) * 1440.0
+      / (SELECT sample_rate FROM k) + 1.0 )        AS sample_ratio,
+        CASE
+            WHEN u.n_samples >= (SELECT min_samples FROM k) THEN 1 ELSE 0
+        END
+        AS has_min_samples
+    FROM u;
 
-insert into hosts (host, partition) values ('alexis', 'ERROR');
-insert into hosts (host, partition) values ('alexis', '/home');
-insert into hosts (host, partition) values ('alexis', '/usr/local');
-insert into hosts (host, partition) values ('adam', 'ERROR');
-insert into hosts (host, partition) values ('adam', '/home');
-insert into hosts (host, partition) values ('adam', '/');
-insert into hosts (host, partition) values ('spydur', 'ERROR');
-insert into hosts (host, partition) values ('spydur', '/home');
-insert into hosts (host, partition) values ('spydur', '/usr/local');
-insert into hosts (host, partition) values ('spydur', '/scratch');
-insert into hosts (host, partition) values ('billieholiday', 'ERROR');
-insert into hosts (host, partition) values ('billieholiday', '/home');
-insert into hosts (host, partition) values ('billieholiday', '/');
-insert into hosts (host, partition) values ('justin', 'ERROR');
-insert into hosts (host, partition) values ('justin', '/home');
-insert into hosts (host, partition) values ('justin', '/');
-insert into hosts (host, partition) values ('justin', '/scr');
-insert into hosts (host, partition) values ('justin', '/data');
-insert into hosts (host, partition) values ('boyi', '/data');
-insert into hosts (host, partition) values ('boyi', '/scr');
-insert into hosts (host, partition) values ('boyi', '/');
-insert into hosts (host, partition) values ('boyi', 'ERROR');
-insert into hosts (host, partition) values ('camryn', '/');
-insert into hosts (host, partition) values ('camryn', '/home');
-insert into hosts (host, partition) values ('camryn', 'ERROR');
-insert into hosts (host, partition) values ('cooper', '/');
-insert into hosts (host, partition) values ('cooper', '/home');
-insert into hosts (host, partition) values ('cooper', 'ERROR');
-insert into hosts (host, partition) values ('erica', '/home');
-insert into hosts (host, partition) values ('erica', '/');
-insert into hosts (host, partition) values ('erica', '/scratch');
-insert into hosts (host, partition) values ('erica', 'ERROR');
-insert into hosts (host, partition) values ('evan', '/');
-insert into hosts (host, partition) values ('evan', '/home');
-insert into hosts (host, partition) values ('evan', 'ERROR');
-insert into hosts (host, partition) values ('hamilton', '/home');
-insert into hosts (host, partition) values ('hamilton', '/');
-insert into hosts (host, partition) values ('hamilton', 'ERROR');
-insert into hosts (host, partition) values ('irene', '/home');
-insert into hosts (host, partition) values ('irene', '/');
-insert into hosts (host, partition) values ('irene', 'ERROR');
-insert into hosts (host, partition) values ('kevin', '/');
-insert into hosts (host, partition) values ('kevin', '/home');
-insert into hosts (host, partition) values ('kevin', 'ERROR');
-insert into hosts (host, partition) values ('mayer', '/home');
-insert into hosts (host, partition) values ('mayer', '/');
-insert into hosts (host, partition) values ('mayer', 'ERROR');
-insert into hosts (host, partition) values ('michael', '/');
-insert into hosts (host, partition) values ('michael', '/home');
-insert into hosts (host, partition) values ('michael', 'ERROR');
-insert into hosts (host, partition) values ('sarah', '/');
-insert into hosts (host, partition) values ('sarah', 'ERROR');
-insert into hosts (host, partition) values ('thais', '/');
-insert into hosts (host, partition) values ('thais', '/home');
-insert into hosts (host, partition) values ('thais', 'ERROR');
-insert into hosts (host, partition) values ('spiderweb', '/');
-insert into hosts (host, partition) values ('spiderweb', '/var');
-insert into hosts (host, partition) values ('spiderweb', '/opt');
-insert into hosts (host, partition) values ('spiderweb', '/home');
-insert into hosts (host, partition) values ('spiderweb', '/usr/local');
-insert into hosts (host, partition) values ('enterprise', '/');
-insert into hosts (host, partition) values ('enterprise', '/home');
-insert into hosts (host, partition) values ('enterprise', 'ERROR');
-insert into hosts (host, partition) values ('trueuser', '/');
-insert into hosts (host, partition) values ('trueuser', '/mnt/usrlocal');
-insert into hosts (host, partition) values ('trueuser', '/var');
-insert into hosts (host, partition) values ('trueuser', 'ERROR');
-insert into hosts (host, partition) values ('truenas', '/mnt/Parish_backup');
-insert into hosts (host, partition) values ('truenas', '/');
-insert into hosts (host, partition) values ('truenas', '/var');
-insert into hosts (host, partition) values ('truenas', 'ERROR');
-insert into hosts (host, partition) values ('newnas', '/var');
-insert into hosts (host, partition) values ('newnas', '/');
-insert into hosts (host, partition) values ('newnas', 'ERROR');
-insert into hosts (host, partition) values ('newnas', '/mnt/chem1');
+-- And this view selects which ones are worth analyzing.
+CREATE VIEW IF NOT EXISTS eligible_series AS
+    SELECT * FROM recent_coverage
+        WHERE has_min_samples = 1 AND sample_ratio >= 0.60;
+
+
+-- What's bad right now? This view collects the data.
+CREATE VIEW IF NOT EXISTS current_latest AS
+    WITH latest AS (
+        SELECT s.* FROM stats s
+            JOIN (SELECT host, mountpoint, MAX(time) AS max_t FROM stats
+                GROUP BY host, mountpoint ) m
+                    ON s.host=m.host AND
+                        s.mountpoint=m.mountpoint AND
+                        s.time=m.max_t )
+    SELECT host, mountpoint, time AS last_time,
+            used * 1.0 / total AS utilization,
+            free * 1.0 / total AS free_pct
+        FROM latest;
+
+-- And these are the ones that are over the limits.
+CREATE VIEW IF NOT EXISTS alerts AS
+    SELECT c.host, c.mountpoint, c.last_time, c.utilization, c.free_pct,
+        (SELECT alert_threshold FROM konstants WHERE id=1) AS threshold
+    FROM current_latest c
+        WHERE c.utilization >= (SELECT threshold FROM konstants WHERE id=1)
+    ORDER BY c.utilization DESC, c.free_pct ASC;
+
+
 

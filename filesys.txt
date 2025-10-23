@@ -1,3 +1,0 @@
-spdrstor01:/home
-spdrstor01:/scratch
-/dev/mapper/vg_os-var

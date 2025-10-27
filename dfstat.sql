@@ -18,6 +18,37 @@ INSERT INTO konstants (id, recent_days, sample_rate,
     kpss_level, kpss_trend, min_samples, alert_threshold)
     VALUES (1, 7, 60, 0.45, 0.142, 24, 0.8);
 
+CREATE TABLE IF NOT EXISTS logins (
+    login TEXT PRIMARY KEY
+    )
+
+-- aamy adam alexis boyi camryn cooper evan hamilton irene2 josh justin kevin khanh mayer michael sarah thais
+INSERT INTO logins (login) VALUES
+    ('root@aamy'),
+    ('root@adam'),
+    ('root@alexis'),
+    ('root@boyi'),
+    ('root@camryn'),
+    ('root@cooper'),
+    ('root@evan'),
+    ('root@hamilton'),
+    ('root@irene2'),
+    ('root@josh'),
+    ('root@justin'),
+    ('root@kevin'),
+    ('root@khanh'),
+    ('root@mayer'),
+    ('root@michael'),
+    ('root@sarah'),
+    ('root@thais'),
+    ('installer@spydur'),
+    ('installer@spiderweb'),
+    ('root@sarahvaughan'),
+    ('root@natkingcole'),
+    ('root@franksinatra'),
+    ('root@trueuser');
+
+
 
 -- Straightforward fact table.
 CREATE TABLE IF NOT EXISTS stats (

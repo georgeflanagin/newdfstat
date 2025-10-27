@@ -68,9 +68,11 @@ class DFDB (SQLiteDB):
         host, mountpoint, total, used )
         VALUES (?, ?, ?, ?)"""
 
+    GET_CONSTANTS = """SELECT * FROM konstants"""
+
     GET_DATA = """SELECT * FROM recent_stats"""
 
-    GET_CONSTANTS = """SELECT * FROM konstants"""
+    GET_LOGINS = """SELECT * FROM logins"""
 
     def __init__(self, name:str) -> None:
         super.__init__(name, use_pandas=use_pandas)
@@ -83,13 +85,6 @@ class DFDB (SQLiteDB):
         return self.execute_SQL(DFDB.ADD_ROW, host, mountpoint, total, used)
 
 
-    def get_data(self) -> pandas.DataFrame:
-        """
-        Retrieve rows for analysis.
-        """
-        return self.execute_SQL(DFDB.GET_DATA)
-
-
     def get_constants(self) -> dict:
         """
         Column names are the keys.
@@ -98,3 +93,15 @@ class DFDB (SQLiteDB):
         return dict(zip(df.columns.tolist(), df.iloc[0].tolist()))
 
 
+    def get_data(self) -> pandas.DataFrame:
+        """
+        Retrieve rows for analysis.
+        """
+        return self.execute_SQL(DFDB.GET_DATA)
+
+
+    def get_logins(self) -> pandas.DataFrame:
+        """
+        The remote logins are stored in the database.
+        """
+        df = self.execute_SQL(DFDB.GET_LOGINS)['login'].tolist()

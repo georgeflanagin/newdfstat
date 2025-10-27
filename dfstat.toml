@@ -1,10 +1,4 @@
 ########################################################################
-# The database contains all the information about hosts and
-# partitions that this program monitors.
-########################################################################
-database = './dfstat.db'
-
-########################################################################
 # Messaging information
 ########################################################################
 
@@ -37,14 +31,6 @@ time_interval = 3600
 # Number of samples in the current window.
 ###
 window_size = 50
-
-###
-# Down reporting: this is the number of consecutive times that
-# a host can be non-responsive before we report it as down.
-###
-num_allowed_failures = 1
-message_repeat = 86340 # One minute less than a day.
-failure_message = "{} is non-responsive."
 
 ###
 # Definitions of what we are monitoring for statistical analysis

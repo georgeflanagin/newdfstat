@@ -75,7 +75,7 @@ class DFDB (SQLiteDB):
     GET_LOGINS = """SELECT * FROM logins"""
 
     def __init__(self, name:str) -> None:
-        super.__init__(name, use_pandas=use_pandas)
+        super().__init__(name, use_pandas=use_pandas)
 
 
     def add_row(self, host:str, mountpoint:str, total:int, used:int) -> int:
@@ -104,4 +104,5 @@ class DFDB (SQLiteDB):
         """
         The remote logins are stored in the database.
         """
-        df = self.execute_SQL(DFDB.GET_LOGINS)['login'].tolist()
+        df = self.execute_SQL(DFDB.GET_LOGINS)
+        return df['login'].tolist()

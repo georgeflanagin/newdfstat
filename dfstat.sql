@@ -9,20 +9,23 @@ CREATE TABLE konstants (
     kpss_level REAL NOT NULL CHECK (kpss_level BETWEEN 0.45 AND 0.50),
     kpss_trend REAL NOT NULL CHECK (kpss_trend BETWEEN 0.14 AND 0.15),
     min_samples INTEGER NOT NULL CHECK (min_samples BETWEEN 24 AND 760),
-    alert_threshold REAL NOT NULL CHECK (alert_threshold BETWEEN 0.5 AND 0.9)
+    alert_threshold REAL NOT NULL CHECK (alert_threshold BETWEEN 0.5 AND 0.9),
+    remote_command TEXT NOT NULL,
+    remote_file TEXT NOT NULL
     ) WITHOUT ROWID;
 
 
 -- Sane values if we are building the database.
 INSERT INTO konstants (id, recent_days, sample_rate,
-    kpss_level, kpss_trend, min_samples, alert_threshold)
-    VALUES (1, 7, 60, 0.45, 0.142, 24, 0.8);
+    kpss_level, kpss_trend, min_samples, alert_threshold,
+    remote_command, remote_file)
+    VALUES (1, 7, 60, 0.45, 0.142, 24, 0.8,
+    'python dfstub.py', '/tmp/dfdata');
 
 CREATE TABLE IF NOT EXISTS logins (
     login TEXT PRIMARY KEY
-    )
+    );
 
--- aamy adam alexis boyi camryn cooper evan hamilton irene2 josh justin kevin khanh mayer michael sarah thais
 INSERT INTO logins (login) VALUES
     ('root@aamy'),
     ('root@adam'),

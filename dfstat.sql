@@ -46,6 +46,7 @@ INSERT INTO logins (login) VALUES
     ('root@thais'),
     ('installer@spydur'),
     ('installer@spiderweb'),
+    ('zeus@arachne'),
     ('root@sarahvaughan'),
     ('root@natkingcole'),
     ('root@franksinatra'),

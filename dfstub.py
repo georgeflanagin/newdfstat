@@ -64,7 +64,7 @@ def dfstub_main() -> int:
     result=ast.literal_eval(pprint.pformat(result, width=120))
     print(result)
 
-    with open('/tmp/df.data', 'wb+') as f:
+    with open('/tmp/dfdata', 'wb+') as f:
         f.write(pickle.dumps(result, pickle.DEFAULT_PROTOCOL))
         f.flush()
 

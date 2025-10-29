@@ -1,4 +1,4 @@
 function dfstat
 {
-    python dfstat.py -z --no-daemon $@ 
+    python dfstat.py --zap --log-level 10 $@
 }

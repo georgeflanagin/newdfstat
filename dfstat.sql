@@ -20,7 +20,7 @@ INSERT INTO konstants (id, recent_days, sample_rate,
     kpss_level, kpss_trend, min_samples, alert_threshold,
     remote_command, remote_file)
     VALUES (1, 7, 60, 0.45, 0.142, 24, 0.8,
-    'python dfstub.py', '/tmp/dfdata');
+    'python3.12 dfstub.py', '/tmp/dfdata');
 
 CREATE TABLE IF NOT EXISTS logins (
     login TEXT PRIMARY KEY

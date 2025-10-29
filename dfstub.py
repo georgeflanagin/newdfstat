@@ -15,16 +15,10 @@ if sys.version_info < min_py:
 ###
 # Other standard distro imports
 ###
-import ast
 from   datetime import datetime, timezone
 import pickle
 import pprint
 import shutil
-
-###
-# From hpclib
-###
-from   sloppytree import SloppyTree
 
 __author__ = 'George Flanagin'
 __copyright__ = 'Copyright 2025, University of Richmond'
@@ -37,31 +31,33 @@ __license__ = 'MIT'
 
 
 def dfstub_main() -> int:
-    result=SloppyTree()
-    result.time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    result={}
+    result['home'] = {}
+    result['scratch'] = {}
 
     try:
         data=shutil.disk_usage('/home')
-        result.home.total=data.total
-        result.home.used=data.used
+        result['home']['total']=data.total
+        result['home']['used']=data.used
 
     except FileNotFoundError as e:
-        result.home.total = result.home.used = 0
+        result['home']['total'] = result['home']['used'] = 0
 
     for s in ('/scratch', '/scr', '/data'):
         try:
             data=shutil.disk_usage(s)
-            result.scratch.total=data.total
-            result.scratch.used=data.used
+            result['scratch']['total']=data.total
+            result['scratch']['used']=data.used
             break
 
         except FileNotFoundError as e:
             pass
 
     else:
-        result.scratch.total = result.scratch.used = 0
+        result['scratch']['total'] = result['scratch']['used'] = 0
 
-    result=ast.literal_eval(pprint.pformat(result, width=120))
+    # The print statement puts the data into the stdout associated
+    # with the remote execution.
     print(result)
 
     with open('/tmp/dfdata', 'wb+') as f:

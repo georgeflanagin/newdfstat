@@ -64,7 +64,7 @@ __license__ = 'MIT'
 
 class DFDB (SQLiteDB):
 
-    ADD_ROW = """INSERT INTO STATS (
+    ADD_ROW = """INSERT INTO stats (
         host, mountpoint, total, used )
         VALUES (?, ?, ?, ?)"""
 

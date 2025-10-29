@@ -16,6 +16,7 @@ if sys.version_info < min_py:
 # Other standard distro imports
 ###
 import argparse
+import ast
 from   collections.abc import *
 import contextlib
 import getpass
@@ -23,6 +24,7 @@ import logging
 from   logging import CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
 import pickle
 import signal
+import sqlite3
 import time
 
 ###
@@ -95,25 +97,68 @@ def handler(signum:int, stack:object=None) -> None:
 
 
 @trap
-def collect_data(login:str) -> int:
-    global konstants
+def analyze_data(db:DFDB) -> int:
+    """
+    Take a look at the recent data, and send alerts as necessary.
+    """
+    return os.EX_OK
 
-    return dorunrun(f'{login} {konstants.remote_script}', return_datatype=int)
 
 
 @trap
-def retrieve_data(logins:list) -> SloppyTree:
-    global konstants
+def assemble_data(logins:list) -> SloppyTree:
+    """
+    This function assumes there is something to collect, or at
+    least *attempt* to connect on the remote computers. The argument
+    is a global object -- it is passed as a parameter to assist with
+    testing this function in isolation.
 
-    facts = SloppyTree()
-    localname=os.path.basename(konstants.remote_file)
+    The file adam:/tmp/dfdata becomes ~/adam.dfdata. The files are
+    pickles, so everything we need to know is in them.
+    """
+    global konstants
+    global logger
+
+    facts = {}
 
     for login in logins:
         host=login.split('@')[-1]
-        dorunrun(f"scp {login}:{konstants.remote_file} {host}.{localname}")
-        facts[host] = deepsloppy(pickle.load(open(f"{host}.{localname}", 'rb')))
+        with open(f"{host}.dfdata") as f:
+            s=f.read().strip()
+            if not len(s): continue
+            try:
+                facts[host] = ast.literal_eval(s)
+            except Exception as e:
+                logger.error(f"{e=} {s=}")
 
     return facts
+
+
+@trap
+def collect_data(login:str) -> str:
+    """
+    Run the script on the remote computer. There is no useful return
+    value other than that the attempt succeeded or failed.
+    """
+    global konstants
+    global logger
+
+    host=login.split('@')[-1]
+    stubfile=konstants.remote_command.split()[-1]
+    result = dorunrun(f'scp {stubfile} {login}:.')
+    result = dorunrun(f'ssh {login} {konstants.remote_command}', timeout=10)
+    ###
+    # The return value is something like this:
+    #
+    # "{'home': {'total': 3914624106496, 'used': 813810130944},
+    #   'scratch': {'total': 3914624106496, 'used': 813810130944},
+    #   'time': '2025-10-28 16:28:06'}"
+    ###
+    logger.debug(f'data collection on {login} returned {result=}')
+    with open(f"{host}.dfdata", 'w+') as f:
+        f.write(result['stdout'])
+
+    return result
 
 
 @trap
@@ -121,13 +166,17 @@ def record_data(facts:SloppyTree, db:DFDB) -> int:
     """
     Return the number of records written.
     """
-    i = 0
-    facts = deepsloppy({k:v for k,v in facts.items() if k != 'time'})
-    for h, val in facts.items():
-        for k, v in val.items():
-            db.add_row(h, k, v.total, v.used)
-            i += 1
+    i = j = 0
+    for host, data in facts.items():
+        for mountpoint in data:
+            try:
+                db.add_row(host, mountpoint,
+                    facts[host][mountpoint]['total'], facts[host][mountpoint]['used'])
+                i+=1
+            except sqlite3.IntegrityError as e:
+                j+=1
 
+    logger.debug(f'wrote {i} records to the database; {j} failures.')
     return i
 
 
@@ -144,8 +193,10 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
         return os.EX_CONFIG
 
     db = DFDB(myargs.db)
+    logger.debug('database opened.')
     logins = db.get_logins()
     konstants = SloppyTree(db.get_constants())
+    logger.debug('global data retrieved.')
 
     # Trap all the signals that we can trap.
     for _ in range(signal.SIGRTMIN):
@@ -153,12 +204,13 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
             signal.signal(_, handler)
         except:
             pass
+    logger.debug('signals trapped.')
 
     # If we are running interactively, allow control-c and HUP.
     if os.isatty(0):
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         signal.signal(signal.SIGHUP, signal.SIG_DFL)
-
+        logger.debug('control-c restored.')
 
     while True:
         ###
@@ -172,7 +224,8 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
                 continue
 
             try:
-                result = collect_data(login)
+                collect_data(login)
+                result = 0
             except:
                 result = 1
             finally:
@@ -186,7 +239,7 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
 
 
         # Go get the data.
-        facts = retrieve_data(logins)
+        facts = assemble_data(logins)
 
         # Put it in the database.
         record_data(facts, db)
@@ -201,6 +254,8 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
                 os._exit(os.EX_OK)
 
         # And go at it again.
+        if os.isatty(0):
+            break
         time.sleep(konstants.sample_rate*60)
 
     return os.EX_OK
@@ -231,8 +286,8 @@ if __name__ == '__main__':
     myargs = parser.parse_args()
     if myargs.zap:
         try:
-            unlink(logfile)
-        except:
+            os.unlink(logfile)
+        except Exception as e:
             pass
 
 

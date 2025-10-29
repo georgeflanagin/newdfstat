@@ -104,7 +104,6 @@ def analyze_data(db:DFDB) -> int:
     return os.EX_OK
 
 
-
 @trap
 def assemble_data(logins:list) -> SloppyTree:
     """
@@ -176,7 +175,7 @@ def record_data(facts:SloppyTree, db:DFDB) -> int:
             except sqlite3.IntegrityError as e:
                 j+=1
 
-    logger.debug(f'wrote {i} records to the database; {j} failures.')
+    logger.info(f'wrote {i} records to the database; {j} failures.')
     return i
 
 
@@ -193,10 +192,10 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
         return os.EX_CONFIG
 
     db = DFDB(myargs.db)
-    logger.debug('database opened.')
+    logger.info('database opened.')
     logins = db.get_logins()
     konstants = SloppyTree(db.get_constants())
-    logger.debug('global data retrieved.')
+    logger.info('global data retrieved.')
 
     # Trap all the signals that we can trap.
     for _ in range(signal.SIGRTMIN):
@@ -210,7 +209,7 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
     if os.isatty(0):
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         signal.signal(signal.SIGHUP, signal.SIG_DFL)
-        logger.debug('control-c restored.')
+        logger.info('control-c restored.')
 
     while True:
         ###
@@ -235,7 +234,7 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
         while pids:
             child_pid, exit_status, usage = os.wait3(0)
             pids.remove(child_pid)
-            logger and logger.info(f"{child_pid} finished with {exit_status=}")
+            logger.debug(f"{child_pid} finished with {exit_status=}")
 
 
         # Go get the data.

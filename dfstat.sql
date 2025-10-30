@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS konstants;
 CREATE TABLE konstants (
     id INTEGER PRIMARY KEY CHECK (id=1),
     recent_days INTEGER NOT NULL CHECK (recent_days BETWEEN 1 AND 30),
-    sample_rate INTEGER NOT NULL CHECK (sample_rate BETWEEN 15 AND 120),
+    sample_rate INTEGER NOT NULL CHECK (sample_rate BETWEEN 3 AND 30),
     kpss_level REAL NOT NULL CHECK (kpss_level BETWEEN 0.45 AND 0.50),
     kpss_trend REAL NOT NULL CHECK (kpss_trend BETWEEN 0.14 AND 0.15),
     min_samples INTEGER NOT NULL CHECK (min_samples BETWEEN 24 AND 760),

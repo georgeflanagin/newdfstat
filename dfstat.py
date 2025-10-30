@@ -45,6 +45,7 @@ from   urlogger import URLogger
 # imports and objects that were written for this project.
 ###
 from   dfdb import DFDB
+import analyses
 
 ###
 # Global objects
@@ -77,9 +78,11 @@ __license__ = 'MIT'
 @trap
 def handler(signum:int, stack:object=None) -> None:
     """
-    Map SIGHUP and SIGUSR1 to a restart/reload, and
-    SIGUSR2 and the other common signals to an orderly
-    shutdown.
+    SIGHUP          -- re-read config from the database.
+    SIGUSR1         -- reload analyses module
+    SIGUSR2         -- run analyses now.
+    SIGTERM/SIGQUIT -- orderly shutdown
+
     """
     global logger
     global myargs
@@ -94,14 +97,6 @@ def handler(signum:int, stack:object=None) -> None:
 
     else:
         return
-
-
-@trap
-def analyze_data(db:DFDB) -> int:
-    """
-    Take a look at the recent data, and send alerts as necessary.
-    """
-    return os.EX_OK
 
 
 @trap
@@ -248,7 +243,7 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
             pass
         else:
             try:
-                analyze_data(db)
+                analyses.run(db)
             finally:
                 os._exit(os.EX_OK)
 

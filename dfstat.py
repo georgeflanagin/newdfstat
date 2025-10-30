@@ -90,7 +90,7 @@ def handler(signum:int, stack:object=None) -> None:
     if signum in [ signal.SIGHUP, signal.SIGUSR1 ]:
         dfstat_main(myargs)
 
-    elif signum in [ signal.SIGUSR2, signal.SIGQUIT, signal.SIGTERM, signal.SIGINT ]:
+    elif signum in [ signal.SIGQUIT, signal.SIGTERM ]:
         logger.info(f'Closing up from signal {signum}')
         fileutils.fclose_all()
         sys.exit(os.EX_OK)
@@ -103,12 +103,11 @@ def handler(signum:int, stack:object=None) -> None:
 def assemble_data(logins:list) -> SloppyTree:
     """
     This function assumes there is something to collect, or at
-    least *attempt* to connect on the remote computers. The argument
+    least *attempt* to collect from the remote computers. The argument
     is a global object -- it is passed as a parameter to assist with
     testing this function in isolation.
 
-    The file adam:/tmp/dfdata becomes ~/adam.dfdata. The files are
-    pickles, so everything we need to know is in them.
+    The data from adam is in ~/adam.dfdata, etc.
     """
     global konstants
     global logger
@@ -181,6 +180,12 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
     global logins
     global konstants
 
+    logger.info(f"{myargs=}")
+
+    # --fg will run this program in the foreground.
+    if not myargs.fg:
+        linuxutils.daemonize_me(os.getcwd())
+
     if not os.path.isfile(myargs.db):
         logger.error(f"{myargs.db} not found.")
         print("Cannot find {myargs.db} to open it.")
@@ -206,7 +211,10 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
         signal.signal(signal.SIGHUP, signal.SIG_DFL)
         logger.info('control-c restored.')
 
-    while True:
+    ################# MAIN EVENT LOOP ###################
+
+    num_readings=0
+    while num_readings < myargs.max_samples:
         ###
         # run the data collection program everywhere.
         ###
@@ -247,9 +255,8 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
             finally:
                 os._exit(os.EX_OK)
 
-        # And go at it again.
-        if os.isatty(0):
-            break
+        # And go at it again if we are running in the background.
+        if os.isatty(0): break
         time.sleep(konstants.sample_rate*60)
 
     return os.EX_OK
@@ -266,6 +273,11 @@ if __name__ == '__main__':
         description="What dfstat does, dfstat does best.")
 
     parser.add_argument('--db', type=str, default='dfstat.db')
+    parser.add_argument('--fg', action='store_true',
+        help="Run process in foreground")
+
+    parser.add_argument('--max-samples', type=int, default=sys.maxint,
+        help="Run a limited number of samples.")
 
     parser.add_argument('--log-level', type=int, default=INFO,
         choices=(CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET),

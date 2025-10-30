@@ -66,10 +66,5 @@ __license__ = 'MIT'
 def run(db:DFDB) -> int:
     logger.debug('running analyses')
     data = db.get_data()
-    print(data.columns)
-    pass
 
 
-if __name__ == "__main__":
-    db = DFDB('dfstat.db')
-    run(db)

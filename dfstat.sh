@@ -1,4 +1,5 @@
 function dfstat
 {
-    python dfstat.py --zap --log-level 10 $@
+    export PYTHONPATH=/usr/local/hpclib
+    python3.11 dfstat.py --zap --log-level 10 $@
 }

@@ -236,8 +236,11 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
 
         while pids:
             child_pid, exit_status, usage = os.wait3(0)
-            pids.remove(child_pid)
-            logger.debug(f"{child_pid} finished with {exit_status=}")
+            try:
+                pids.remove(child_pid)
+                logger.debug(f"{child_pid} finished with {exit_status=}")
+            except:
+                logger.error(f"Received signal from unknown child {child_pid}:{exit_status}")
 
 
         # Go get the data.
@@ -256,7 +259,6 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
                 os._exit(os.EX_OK)
 
         # And go at it again if we are running in the background.
-        if os.isatty(0): break
         time.sleep(konstants.sample_rate*60)
 
     return os.EX_OK
@@ -276,7 +278,7 @@ if __name__ == '__main__':
     parser.add_argument('--fg', action='store_true',
         help="Run process in foreground")
 
-    parser.add_argument('--max-samples', type=int, default=sys.maxint,
+    parser.add_argument('--max-samples', type=int, default=sys.maxsize,
         help="Run a limited number of samples.")
 
     parser.add_argument('--log-level', type=int, default=INFO,
@@ -299,12 +301,12 @@ if __name__ == '__main__':
 
     logger = URLogger(logfile=logfile, level=myargs.log_level)
 
-    with linuxutils.LockFile(lockfile):
-        try:
-            outfile = sys.stdout if not myargs.output else open(myargs.output, 'w')
-            with contextlib.redirect_stdout(outfile):
-                sys.exit(globals()[f"{progname}_main"](myargs))
+    # with linuxutils.LockFile(lockfile):
+    try:
+        outfile = sys.stdout if not myargs.output else open(myargs.output, 'w')
+        with contextlib.redirect_stdout(outfile):
+            sys.exit(globals()[f"{progname}_main"](myargs))
 
-        except Exception as e:
-            print(f"Escaped or re-raised exception: {e}")
+    except Exception as e:
+        print(f"Escaped or re-raised exception: {e}")
 

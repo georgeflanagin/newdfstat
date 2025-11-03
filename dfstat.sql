@@ -53,6 +53,19 @@ INSERT INTO logins (login) VALUES
     ('root@trueuser');
 
 
+CREATE TABLE IF NOT EXISTS filldates (
+    host TEXT NOT NULL,
+    mountpoint TEXT NOT NULL,
+    filldate DATETIME DEFAULT NULL,
+    measured_on DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+CREATE INDEX idx_filldate on filldates(host, mountpoint);
+
+
+CREATE VIEW IF NOT EXISTS filldates_view AS
+    SELECT * FROM filldates ORDER BY host, mountpoint, measured_on;
+
 
 -- Straightforward fact table.
 CREATE TABLE IF NOT EXISTS stats (

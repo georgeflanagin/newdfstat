@@ -18,6 +18,7 @@ if sys.version_info < min_py:
 import argparse
 from   collections.abc import *
 import contextlib
+import datetime
 import getpass
 import logging
 from   logging import CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
@@ -64,6 +65,10 @@ __license__ = 'MIT'
 
 class DFDB (SQLiteDB):
 
+    ADD_FILLDATE = """INSERT INTO filldates (
+        host, mountpoint, filldate )
+        VALUES (?, ?, ?)"""
+
     ADD_ROW = """INSERT INTO stats (
         host, mountpoint, total, used )
         VALUES (?, ?, ?, ?)"""
@@ -72,10 +77,19 @@ class DFDB (SQLiteDB):
 
     GET_DATA = """SELECT * FROM recent_stats"""
 
+    GET_FILLDATES = """SELECT * FROM filldates_view"""
+
     GET_LOGINS = """SELECT * FROM logins"""
 
     def __init__(self, name:str) -> None:
         super().__init__(name, use_pandas=use_pandas)
+
+
+    def add_filldate(self, host:str, mountpoint:str,
+        filldate:datetime.datetime) -> int:
+
+        return self.execute_SQL(DFDB.ADD_FILLDATE,
+            host, mountpoint, filldate)
 
 
     def add_row(self, host:str, mountpoint:str, total:int, used:int) -> int:
@@ -98,6 +112,13 @@ class DFDB (SQLiteDB):
         Retrieve rows for analysis.
         """
         return self.execute_SQL(DFDB.GET_DATA)
+
+
+    def get_filldates(self) -> pandas.DataFrame:
+        """
+        Retrieve our projections for the discs filling.
+        """
+        return self.execute_SQL(DFDB.GET_FILLDATES)
 
 
     def get_logins(self) -> pandas.DataFrame:

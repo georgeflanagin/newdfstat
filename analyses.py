@@ -119,7 +119,7 @@ def is_flat(s:pandas.Series, capacity:float) -> bool:
 
 
 @trap
-def kpss_analysis_by_column(db:DFDB, c:str='used') -> pandas.DataFrame:
+def kpss_analysis_by_column(db:DFDB, c:str='used') -> list:
     logger.debug('running analyses')
 
     global df, db_konstants, g_freq
@@ -139,9 +139,6 @@ def kpss_analysis_by_column(db:DFDB, c:str='used') -> pandas.DataFrame:
         if stat > db_konstants['kpss_level']:
             out.append({"host": host, "mountpoint": mnt,
                 "kpss_stat": stat, "pvalue": pval, "lags": lags})
-
-    out=pandas.DataFrame(out)
-    out.to_csv(datetime.datetime.now().isoformat()+".csv")
 
     return out
 
@@ -231,7 +228,7 @@ def populate_globals(db) -> bool:
 
 
 @trap
-def regression_analysis(db:DFDB, c:str='used') -> dict:
+def regression_analysis(db:DFDB, c:str='used', cases:list=None) -> dict:
     """
     Admittedly, it doesn't make much sense to regress on anything
     except space used, but I have likely overlooked many future
@@ -245,6 +242,9 @@ def regression_analysis(db:DFDB, c:str='used') -> dict:
     results = []
 
     for (host, mountpoint), s, fs_size in kpss_grouper(df, return_capacity=True):
+
+        if cases is not None:
+            if (host, mountpoint) not in cases: continue
 
         # logger.debug(f"{host} {mountpoint} {fs_size=} {s=}")
 
@@ -267,10 +267,22 @@ def regression_analysis(db:DFDB, c:str='used') -> dict:
             slope=slope, intercept=intercept, r2=r2, days_to_full=days_to_full
             ))
 
-    results = pandas.DataFrame(results)
-
     # logger.debug(f"Regression {results=}")
     return results
+
+
+@trap
+def run(db:DFDB) -> None:
+    populate_globals(db)
+
+    # Only the interesting cases (i.e., unstable) are in the
+    # result set.
+    results = kpss_analysis_by_column(db)
+    cases = list(tuple(_['host'], _['mountpoint']) for _ in results)
+    results = regression_analysis(db, 'used', cases)
+    for result in results:
+        db.add_filldate(result['host'], result['mountpoint'], result['days_to_full'])
+
 
 
 if __name__ == "__main__":

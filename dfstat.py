@@ -214,7 +214,9 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
     ################# MAIN EVENT LOOP ###################
 
     num_readings=0
+    readings_per_hour = 60 // konstants.sample_rate
     while num_readings < myargs.max_samples:
+        num_readings += 1
         ###
         # run the data collection program everywhere.
         ###
@@ -249,14 +251,19 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
         # Put it in the database.
         record_data(facts, db)
 
-        # Play it safe, and run the analysis async.
-        if (pid := os.fork()):
-            pass
-        else:
-            try:
-                analyses.run(db)
-            finally:
-                os._exit(os.EX_OK)
+        # Play it safe, and run the analysis on its own
+        # thread once per hour. Running the analyses is
+        # more complicated than taking the readings, and
+        # running them on their own thread prevents bugs
+        # from crashing the daemon.
+        if not num_readings % readings_per_hour:
+            if (pid := os.fork()):
+                pass
+            else:
+                try:
+                    analyses.run(db)
+                finally:
+                    os._exit(os.EX_OK)
 
         # And go at it again if we are running in the background.
         time.sleep(konstants.sample_rate*60)

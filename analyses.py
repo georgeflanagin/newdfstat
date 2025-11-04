@@ -19,13 +19,14 @@ from   collections.abc import *
 import datetime
 import logging
 from   logging import CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
+import warnings
 
 ###
 # Installed libraries like numpy, pandas, paramiko
 ###
 import pandas
 import numpy as np
-from sklearn.linear_model import LinearRegression
+from   sklearn.linear_model import LinearRegression
 
 # Use Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test
 # to determine if the data is stationary
@@ -34,6 +35,8 @@ from sklearn.linear_model import LinearRegression
 # and, hence, hpc@richmond.edu needs to be informed.
 from statsmodels.tsa.stattools import kpss
 from statsmodels.tsa.stattools import adfuller
+from statsmodels.tools.sm_exceptions import InterpolationWarning
+
 
 ###
 # From hpclib
@@ -48,9 +51,13 @@ from   urlogger import URLogger
 from   dfdb import DFDB
 
 ###
-# Global objects
+# Global objects and actions
 ###
-logger = URLogger.get_top_logger()
+warnings.filterwarnings("ignore", category=InterpolationWarning)
+if __name__ != "__main__":
+    logger = URLogger.get_top_logger()
+else:
+    logger = None
 
 ###
 # The dataframe is global so that we can avoid populating it
@@ -58,7 +65,7 @@ logger = URLogger.get_top_logger()
 # remember to check this to see if it "is not None".
 df = None
 db_konstants = None
-freq = None
+g_freq = None
 
 ###
 # Credits
@@ -93,54 +100,114 @@ def host_mount_grouper(df: pandas.DataFrame) -> pandas.DataFrame:
 
 
 @trap
-def kpss_grouper(df: pandas.DataFrame, value_col:str="used") -> tuple:
+def is_flat(s:pandas.Series, capacity:float) -> bool:
     """
-    This is a grouper specifically for columns undergoing
-    kpss analysis. 'used' (the amount of disc space used) seems
-    like the obvious default given that it increases as the
-    disc fills.
+    Avoid testing series where the value does not change (significantly).
 
-    This function also cleans up the data and imputes missing
-    values in the time series.
+    return -- None for bad data, True for flat, False for changing.
     """
-    global freq
+    global logger
 
-    df = df.copy()
+    s = s.dropna().astype(float)
+    if s.empty: return None
 
-    df["time"] = pandas.to_datetime(df["time"], errors="coerce", utc=True)
-    for key, g in df.groupby(["host", "mountpoint"], sort=False):
-        s = (
-            g.sort_values("time")
-             .set_index("time")[value_col]
-             .resample(freq).mean()
-             .interpolate(limit_direction="both")
-            )
-        yield key, s
+    span = (s.max() - s.min()) / capacity
+    logger.info(f"{s.max()=} {s.min()=} {span=} {capacity=}")
+
+    return span/capacity < 0.005
+
 
 
 @trap
 def kpss_analysis_by_column(db:DFDB, c:str='used') -> pandas.DataFrame:
     logger.debug('running analyses')
 
-    global df, db_konstants, freq
+    global df, db_konstants, g_freq
     out = []
-    populate_globals()
+    populate_globals(db)
 
-    for (host, mnt), s in kpss_grouper(df, c):
+    for (host, mnt), s, size in kpss_grouper(df, c, return_capacity=True):
+        if is_flat(s, size): continue
+
         try:
+            s['used'] /= size
             stat, pval, lags, crit = kpss(s, regression="c", nlags="auto")
         except Exception as e:
-            logger.debug(f"{stat=}, {pval=}, {e=}")
+            logger.debug(f"{e=}")
 
         # No reason to further examine ones that are not changing.
         if stat > db_konstants['kpss_level']:
             out.append({"host": host, "mountpoint": mnt,
-                    "kpss_stat": stat, "pvalue": pval, "lags": lags})
+                "kpss_stat": stat, "pvalue": pval, "lags": lags})
 
     out=pandas.DataFrame(out)
     out.to_csv(datetime.datetime.now().isoformat()+".csv")
 
     return out
+
+
+def kpss_grouper(
+        df: pandas.DataFrame,
+        value_col: str = "used",
+        *,
+        freq: str = None,
+        megabytes: bool = True,
+        return_capacity: bool = False,
+    ) -> Iterator[Tuple[Tuple[str, str], pandas.Series, Optional[float]]]:
+    """
+    df -- the DataFrame retrieved from the database.
+    value_col -- what we are triaging.
+    freq -- default is the freq in the konstants table of the database.
+    megabytes -- if we want to scale the numbers. Figures in the
+        billions and trillions are too large for these analyses.
+    return_capacity -- whether or not to return the "size" of the
+        file system.
+
+    yields:
+      key: (host, mountpoint)
+      s:   pandas.Series with DatetimeIndex, uniformly sampled
+      cap: float capacity in MiB or None if you did not ask for it.
+    """
+
+    global logger
+
+    if freq is None: freq = g_freq
+
+    df = df.copy()
+
+    # Robust datetime parsing (UTC) and drop rows with bad timestamps
+    df["time"] = pandas.to_datetime(df["time"], utc=True, errors="coerce")
+    df = df.dropna(subset=["time"])
+
+    # Coerce the value column to numeric (guards against stray strings)
+    df[value_col] = pandas.to_numeric(df[value_col], errors="coerce")
+
+    has_total = "total" in df.columns
+    if has_total:
+        df["total"] = pandas.to_numeric(df["total"], errors="coerce")
+
+    for key, g in df.groupby(["host", "mountpoint"], sort=False):
+        g = g.sort_values("time")
+
+        # Optional capacity (take max if it varies; otherwise the single value)
+        cap_mib = None
+        if return_capacity and has_total and not g["total"].isna().all():
+            cap = g["total"].max()
+            if pandas.notna(cap):
+                cap_mib = float(cap) / (1 << 20) if megabytes else float(cap)
+
+        # Build the time series with a DatetimeIndex and regularize it
+        s = (
+            g.set_index("time")[value_col]
+             .astype(float)
+             .resample(freq).mean()
+             .interpolate(limit_direction="both")
+        )
+
+        # Optional scaling (bytes -> MiB)
+        if megabytes: s = s / (1<<20)
+
+        yield (key, s, cap_mib if return_capacity else None)
 
 
 @trap
@@ -150,15 +217,14 @@ def populate_globals(db) -> bool:
     The return value is probably not necessary, but it is
     present to communicate if there is something to do.
     """
-    global df, db_konstants, freq
-    if any(_ is None for _ in (df, db_konstants, freq)):
+    global df, db_konstants, g_freq
+    if any(_ is None for _ in (df, db_konstants, g_freq)):
         df = db.get_data()
-        df['used'] /= df['total'].replace(0, np.nan)
         db_konstants = db.get_constants()
 
         # pandas uses figures like "5min", but the database
         # stores 5 as an integer.
-        freq = db_konstants['sample_rate'] = str(db_konstants['sample_rate'])+"min"
+        g_freq = db_konstants['sample_rate'] = str(db_konstants['sample_rate'])+"min"
 
         return True
     return False
@@ -172,37 +238,51 @@ def regression_analysis(db:DFDB, c:str='used') -> dict:
     uses when writing this code.
     """
 
-    global df, db_konstants, freq
-    populate_globals()
+    global logger
+    global df, db_konstants, g_freq
+    populate_globals(db)
 
     results = []
 
-    for (host, mountpoint), s in host_mount_grouper(df):
+    for (host, mountpoint), s, fs_size in kpss_grouper(df, return_capacity=True):
 
-        # t is the normalized days since the earliest reading.
-        t = (s.index - s.index[0]).total_seconds() / 86400.0
+        # logger.debug(f"{host} {mountpoint} {fs_size=} {s=}")
 
-        # -1 -> however long it is, 1 -> one column in this matrix.
-        X = t.reshape(-1, 1)
-        y = s[c].values
+        t_days = (s.index - s.index[0]) / pandas.Timedelta(days=1)
+
+        # Prepare X, y for regression
+        X = t_days.to_numpy().reshape(-1, 1)
+        y = s.to_numpy()
+
         model = LinearRegression().fit(X, y)
-        slope = model.coef_[0]
+        slope = model.coef_[0]          # MiB per day
         intercept = model.intercept_
         r2 = model.score(X, y)
 
-        days_to_full = (1 - intercept) / slope if slope > 0 else np.inf
+        if fs_size is not None and slope > 0:
+            days_to_full = (fs_size - intercept) / slope
+
         results.append(dict(
             host=host, mountpoint=mountpoint,
             slope=slope, intercept=intercept, r2=r2, days_to_full=days_to_full
             ))
 
-    return pandas.DataFrame(results)
+    results = pandas.DataFrame(results)
 
+    # logger.debug(f"Regression {results=}")
+    return results
 
-
-run = kpss_analysis_by_column
 
 if __name__ == "__main__":
+    try:
+        os.unlink('analyses.log')
+    except:
+        pass
+
+    logger = URLogger(logfile='analyses.log', level=logging.DEBUG)
     db = DFDB('dfstat.db')
-    run(db)
+    df = db.get_data()
+
+    kpss_analysis_by_column(db)
+    regression_analysis(db)
 

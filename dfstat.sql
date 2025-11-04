@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS stats;
 DROP TABLE IF EXISTS konstants;
+DROP TABLE IF EXISTS filldates;
 
 -- Keep this stuff in here rather than in a config file.
 CREATE TABLE konstants (

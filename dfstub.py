@@ -43,7 +43,7 @@ def dfstub_main() -> int:
     except FileNotFoundError as e:
         result['home']['total'] = result['home']['used'] = 0
 
-    for s in ('/scratch', '/scr', '/data'):
+    for s in ('/mnt/everything', '/scratch', '/scr', '/data'):
         try:
             data=shutil.disk_usage(s)
             result['scratch']['total']=data.total

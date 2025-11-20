@@ -54,48 +54,62 @@ __license__ = 'MIT'
 
 
 class HotSwap:
-    """Manages a function living inside a module, with safe reload."""
-    def __init__(self, module_name: str, func_name: str = "analyze_data"):
+    """
+    Reload a block of code from disk. The load mechanism will
+    import the code if it is not already loaded, so you do not
+    need to check the status ahead of time.
+
+    This does not implement a singleton pattern.
+    """
+    def __init__(self, module_name:str, foo_name:str):
         self._module_name = module_name
-        self._func_name = func_name
+        self._foo_name = foo_name
         self._lock = threading.RLock()
         self._module = None
-        self.func = None  # current callable
+        self.foo = None
         self.version = 0
         self.load(initial=True)
 
 
     def load(self, initial=False):
+        """
+        Perform the load or swap.
+        """
         with self._lock:
             try:
+                # If it is not loaded, just import it.
                 if initial or self._module_name not in sys.modules:
-                    logger.info("Importing %s", self._module_name)
+                    logger.warning("Importing %s", self._module_name)
                     self._module = importlib.import_module(self._module_name)
+
                 else:
-                    logger.info("Reloading %s", self._module_name)
+                    logger.warning("Reloading %s", self._module_name)
                     importlib.invalidate_caches()
                     self._module = importlib.reload(self._module)
 
                 new_func = getattr(self._module, self._func_name)
                 if not callable(new_func):
-                    raise TypeError(f"{self._module_name}.{self._func_name} is not callable")
+                    raise TypeError(
+                        f"{self._module_name}.{self._func_name} is not callable"
+                        )
 
                 # Optional: verify signature/contract here if you like
                 self.func = new_func  # atomic swap
                 self.version += 1
-                logger.info("Activated %s.%s (version %d)",
+                logger.warning("Activated %s.%s (version %d)",
                          self._module_name, self._func_name, self.version)
 
             except Exception as e:
                 # Keep previous version running; just log the failure.
                 if initial:
-                    raise  # no previous version to keep
-                logger.exception("Reload FAILED; keeping previous version: %s", e)
+                    raise
+                logger.error(f"Reload FAILED; keeping previous version: {e=}")
 
     def __call__(self, *args, **kwargs):
         # No lock here: we want fast calls; assignment of self.func is atomic.
         f = self.func
         return f(*args, **kwargs)
+
 
 hot = HotSwap("analyses.current")  # e.g., analyses/current.py has analyze_data()
 reload_requested = threading.Event()

@@ -20,6 +20,7 @@ import ast
 from   collections.abc import *
 import contextlib
 import getpass
+import importlib
 import logging
 from   logging import CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
 import pickle
@@ -261,6 +262,7 @@ def dfstat_main(myargs:argparse.Namespace) -> int:
                 pass
             else:
                 try:
+                    hotswap.reload_module(analyses)
                     analyses.run(db)
                 finally:
                     os._exit(os.EX_OK)

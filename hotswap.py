@@ -2,6 +2,13 @@
 import typing
 from   typing import *
 
+"""
+There are two components in this module:
+
+    reload_module -- reloads something you can import.
+    HotSwap -- a class wrapper around a function to reload.
+"""
+
 ###
 # Standard imports, starting with os and sys
 ###
@@ -53,6 +60,26 @@ __status__ = 'in progress'
 __license__ = 'MIT'
 
 
+@trap
+def reload_module(module):
+    """
+    Recursively reload a module and its submodules.
+    """
+    try:
+        importlib.reload(module)
+        logger.debug(f'Reloaded {module}')
+    except Exception as e:
+        logger.debug(f'Failed to reload {module} {e=}')
+
+
+    # If analyses has submodules like analyses.utils, analyses.processors, etc.
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if isinstance(attr, type(sys)) and attr.__name__.startswith(module.__name__ + '.'):
+            reload_module(attr)
+
+
+
 class HotSwap:
     """Manages a function living inside a module, with safe reload."""
     def __init__(self, module_name: str, func_name: str = "analyze_data"):
@@ -96,32 +123,4 @@ class HotSwap:
         # No lock here: we want fast calls; assignment of self.func is atomic.
         f = self.func
         return f(*args, **kwargs)
-
-hot = HotSwap("analyses.current")  # e.g., analyses/current.py has analyze_data()
-reload_requested = threading.Event()
-
-def _sig_hup(_signo, _frame):
-    reload_requested.set()
-
-signal.signal(signal.SIGHUP, _sig_hup)
-
-def worker_loop():
-    while True:
-        # Do your normal daemon work to get 'payload'...
-        payload = {"ts": time.time()}
-        try:
-            result = hot(payload)   # call the hot-swapped function
-            logger.info("Result(v%d): %s", hot.version, result)
-        except Exception:
-            logger.exception("analyze_data crashed")
-
-        # Handle reload signal without blocking the fast path
-        if reload_requested.is_set():
-            reload_requested.clear()
-            hot.load()
-
-        time.sleep(2)
-
-if __name__ == "__main__":
-    worker_loop()
 

@@ -54,10 +54,7 @@ from   dfdb import DFDB
 # Global objects and actions
 ###
 warnings.filterwarnings("ignore", category=InterpolationWarning)
-if __name__ != "__main__":
-    logger = URLogger.get_top_logger()
-else:
-    logger = None
+logger = URLogger.get_top_logger()
 
 ###
 # The dataframe is global so that we can avoid populating it
